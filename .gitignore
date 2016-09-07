@@ -87,3 +87,9 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# example text files, bertini run folder
+A.txt
+b.txt
+C.txt
+brun
