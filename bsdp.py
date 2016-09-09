@@ -16,30 +16,29 @@ def find_start_points_optimum(C, A, b):
     # choose y*_{m+1} to make S* strictly positive definite
     smallest_eig = min(np.linalg.eigvals(Ss))
     if smallest_eig <= 0:
-        ymp1 = 1 - smallest_eig
-        Amp1 = ymp1*np.eye(n)
+        ymp1 = smallest_eig - 1
+        Amp1 = np.eye(n)
     else:
         ymp1 = 0
         Amp1 = np.zeros((n,n))
 
     # compute S*, X*, b*
-    Ss += Amp1
+    Ss -= ymp1*Amp1 # make it to be "-"
     Xs = np.linalg.inv(Ss)
+    # A[i]*Xs: elem-wise mult. for np.ndarray
     bs = [(A[i]*Xs).sum() for i in range(m)]
 
     return Xs,ys,bs,ymp1
 
-def find_start_points_feasible(C, A, b):
-    bs = [0]*len(b) + [-1]
-    return bs
+# def find_start_points_feasible(C, A, b):
+#     b = [0]*len(b) + [1]
+#     return b
 
-def compute_optimum(C, A, b, mode):
+def compute_optimum(C, A, b):
     # compute start points
     # C, A are np.2darray (full dense matrix), b is a list of float
-    if mode == 0: # optimum mode
-        Xs,ys,bs,ymp1 = find_start_points_optimum(C, A, b)
-    else: # feasibility mode
-        bs = find_start_points_feasible(C, A, b)
+    # Xs: np.ndarray, ys, bs: list, ymp1 = scaler (nonpositive!)
+    Xs,ys,bs,ymp1 = find_start_points_optimum(C, A, b)
     m = len(b)
     n = C.shape[0] # square
 
@@ -75,7 +74,7 @@ def compute_optimum(C, A, b, mode):
                 eqterms.append("A{0}_{1}_{2}*y{0}".format(i,j,k))
             g = " - ".join(eqterms)
             if j == k:
-                g += " + y{0}*mu".format(m)
+                g += " - y{0}*mu".format(m) # make it to be "-"
             subfunctions["S{0}_{1}".format(j,k)] = g
 
     # two set of eqns
@@ -160,11 +159,15 @@ def compute_optimum(C, A, b, mode):
     return X,y,S # return np.matrix, np.array
 
 def compute_feasibility(C, A, b):
-    # max -y_{m+1} s.t. C - \sum Ai*yi + I*y_{m+1} >= 0
-    # => b~ = [0;...;0;-1] \in \R^{m+1}
-    ## under development
+    # max y_{m+1} s.t. C - \sum Ai*yi - I*y_{m+1} >= 0
+    # => b~ = [0;...;0;1] \in \R^{m+1}
+    ## enlarge b and A, A[m+1] = I
     #m = len(A)
-    #n = C.shape[0] # square
+    n = C.shape[0] # square
+    # modify b, add one more dimension
+    b = [0]*len(b) + [1] # make it to be "+"
+    # modify A, add one more dimension
+    A.append(np.eye(n))
     X,y,S = compute_optimum(C,A,b)
 
 def postprocess(X,y,S,C,A,b):
@@ -230,15 +233,23 @@ if __name__ == '__main__':
     
     # read data from file located in examples: C, A, b
     cwd = os.getcwd()
-    example_tag = '2' ## change here, also can be input on command line
+    example_tag = '3' ## change here, also can be input on command line
     example_dirname = os.path.join(cwd, 'examples')
 
     C,A,b = sdp_in.read_in_SDP(example_dirname, example_tag)
 
-    # task 1: optimum solve, mode = 0
-    X,y,S = compute_optimum(C,A,b, 0)
+    # task 1: optimum solve
+    X,y,S = compute_optimum(C, A, b)
     # postprocessing
     postprocess(X,y,S,C,A,b)
 
-    # task 2: feasibility test, mode = 1
-    compute_feasibility(C, A, b, 1)
+    # task 2: feasibility test ## failed path! ???
+    X,y,S = compute_feasibility(C, A, b)
+    last_idx = len(b)
+    eps = 1.0e-10
+    if ( y[last_idx] > eps):
+        print("Dual of SDP is strict feasible!")
+    elif (y[last_idx] < -eps):
+        print("Dual of SDP is infeasible!")
+    else: #==0?
+        print("Two cases for Dual of SDP:\n feasible, but not strict feasible \n OR infeasible")

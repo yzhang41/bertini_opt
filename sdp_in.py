@@ -60,9 +60,6 @@ def read_in_SDP(dirname, tag):
     Cfile = os.path.join(dirname, 'C' + tag + '.txt')
     Afile = os.path.join(dirname, 'A' + tag + '.txt')
     bfile = os.path.join(dirname, 'b' + tag + '.txt')
-    print(Cfile)
-    print(Afile)
-    print(bfile)
 
     C = read_in_C_matrix(Cfile)
     A = read_in_A_matrices(Afile)

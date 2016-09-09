@@ -5,3 +5,5 @@ Example list:
 
   Ex2: Ex2 in http://www.math.nus.edu.sg/~mattohkc/sdpt3/sdpexample.html
 
+  Ex3: Example 2.11 in p.11 of the book “Semidefinite Optimization and Convex Algebraic Geometry”
+
