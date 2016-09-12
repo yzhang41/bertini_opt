@@ -7,3 +7,7 @@ Example list:
 
   Ex3: Example 2.11 in p.11 of the book “Semidefinite Optimization and Convex Algebraic Geometry”
 
+  Ex4: Example 2.14 with alpha=1 in p.14 of the book “Semidefinite Optimization and Convex Algebraic Geometry”
+
+  Ex5: from Jon with alpha = 0.1, only for feasibility test, so bfile is unnecessary
+

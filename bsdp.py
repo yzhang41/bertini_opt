@@ -1,3 +1,9 @@
+"""
+Question: 1. path tracking of solus to homogopy, all real solu?
+          2. do we need "Gamma trick" technique?
+             -- I think we need to put a random complex as the coeff. of start eqns.???
+             -- it requires to modify the homotopy
+"""
 import collections
 import os
 import numpy as np
@@ -11,6 +17,14 @@ def find_start_points_optimum(C, A, b):
     m = len(b)
     n = C.shape[0] # square
     ys = [np.random.choice((-1,1))*np.random.random() for i in range(m)]
+    # can we make ys to be random complex?
+    # ys =[]
+    # for i in range(m):
+    # 	ran1 = np.random.choice((-1,1))*np.random.random()
+    # 	ran2 = np.random.choice((-1,1))*np.random.random()
+    # 	ran = complex(ran1, ran2)
+    # 	print(ran)
+    # 	ys.append(ran)
     Ss = C - sum([ys[i]*A[i] for i in range(m)], np.zeros((n,n)))
 
     # choose y*_{m+1} to make S* strictly positive definite
@@ -23,10 +37,15 @@ def find_start_points_optimum(C, A, b):
         Amp1 = np.zeros((n,n))
 
     # compute S*, X*, b*
+    print("ymp1 = ", ymp1)
+    print("Ss = ", Ss)
     Ss -= ymp1*Amp1 # make it to be "-"
+    print("Ss =", Ss)
     Xs = np.linalg.inv(Ss)
     # A[i]*Xs: elem-wise mult. for np.ndarray
     bs = [(A[i]*Xs).sum() for i in range(m)]
+    print("Xs =", Xs)
+    print("bs = ", bs)
 
     return Xs,ys,bs,ymp1
 
@@ -35,9 +54,18 @@ def find_start_points_optimum(C, A, b):
 #     return b
 
 def compute_optimum(C, A, b):
-    # compute start points
+	# compute start points
     # C, A are np.2darray (full dense matrix), b is a list of float
     # Xs: np.ndarray, ys, bs: list, ymp1 = scaler (nonpositive!)
+    print('')
+    print(type(C))
+    print(C)
+    for i in range(len(A)):
+    	print(type(A[i]))
+    	print(A[i])
+    print(type(b))
+    print(b)
+
     Xs,ys,bs,ymp1 = find_start_points_optimum(C, A, b)
     m = len(b)
     n = C.shape[0] # square
@@ -168,7 +196,19 @@ def compute_feasibility(C, A, b):
     b = [0]*len(b) + [1] # make it to be "+"
     # modify A, add one more dimension
     A.append(np.eye(n))
+
+    print('')
+    print(type(C))
+    print(C)
+    for i in range(len(A)):
+    	print(type(A[i]))
+    	print(A[i])
+    print(type(b))
+    print(b)
+
     X,y,S = compute_optimum(C,A,b)
+
+    return X,y,S
 
 def postprocess(X,y,S,C,A,b):
     """
@@ -187,6 +227,14 @@ def postprocess(X,y,S,C,A,b):
     for i in range(m):
         A[i] = np.matrix(A[i])
     b = np.asarray(b)
+
+    print(type(C))
+    print(C)
+    for i in range(len(A)):
+    	print(type(A[i]))
+    	print(A[i])
+    print(type(b))
+    print(b)
 
     # X feasible?
     smallest_eig_X = min(np.linalg.eigvals(X))
@@ -233,23 +281,57 @@ if __name__ == '__main__':
     
     # read data from file located in examples: C, A, b
     cwd = os.getcwd()
-    example_tag = '3' ## change here, also can be input on command line
+    example_tag = '4' ## change here, also can be input on command line
     example_dirname = os.path.join(cwd, 'examples')
+    mode = 1
 
     C,A,b = sdp_in.read_in_SDP(example_dirname, example_tag)
 
     # task 1: optimum solve
-    X,y,S = compute_optimum(C, A, b)
-    # postprocessing
-    postprocess(X,y,S,C,A,b)
+    if mode == 1:
+		X,y,S = compute_optimum(C, A, b)
+	    # postprocessing
+	    # print(type(C))
+	    # print(C)
+	    # for i in range(len(A)):
+	    # 	print(type(A[i]))
+	    # 	print(A[i])
+	    # print(type(b))
+	    # print(b)
+		postprocess(X,y,S,C,A[:],b) # pass a copy of A: A[:]
+	    # print(type(C))
+	    # print(C)
+	    # for i in range(len(A)):
+	    # 	print(type(A[i]))
+	    # 	print(A[i])
+	    # print(type(b))
+	    # print(b)
 
     # task 2: feasibility test ## failed path! ???
-    X,y,S = compute_feasibility(C, A, b)
-    last_idx = len(b)
-    eps = 1.0e-10
-    if ( y[last_idx] > eps):
-        print("Dual of SDP is strict feasible!")
-    elif (y[last_idx] < -eps):
-        print("Dual of SDP is infeasible!")
-    else: #==0?
-        print("Two cases for Dual of SDP:\n feasible, but not strict feasible \n OR infeasible")
+    if mode == 2:
+		print(type(C))
+		print(C)
+		for i in range(len(A)):
+			print(type(A[i]))
+			print(A[i])
+		print(type(b))
+		print(b)
+		X,y,S = compute_feasibility(C, A, b)
+		print('')
+		print(type(C))
+		print(C)
+		for i in range(len(A)):
+			print(type(A[i]))
+			print(A[i])
+		print(type(b))
+		print(b)
+
+		last_idx = len(b)
+		eps = 1.0e-10
+		print("max y_m+1:", y[last_idx])
+		if ( y[last_idx] > eps):
+			print("Dual of SDP is strict feasible!")
+		elif (y[last_idx] < -eps):
+			print("Dual of SDP is infeasible!")
+		else: #==0?
+			print("Two cases for Dual of SDP:\n feasible, but not strict feasible \n OR infeasible")
