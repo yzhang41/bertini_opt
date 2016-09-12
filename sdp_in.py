@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 def map(f, x):
     return [f(y) for y in x]
@@ -55,10 +56,10 @@ def read_in_b_vector(filename):
 
     return b
 
-def read_in_SDP():
-    Cfile = 'C.txt'
-    Afile = 'A.txt'
-    bfile = 'b.txt'
+def read_in_SDP(dirname, tag):
+    Cfile = os.path.join(dirname, 'C' + tag + '.txt')
+    Afile = os.path.join(dirname, 'A' + tag + '.txt')
+    bfile = os.path.join(dirname, 'b' + tag + '.txt')
 
     C = read_in_C_matrix(Cfile)
     A = read_in_A_matrices(Afile)
