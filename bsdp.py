@@ -17,6 +17,7 @@ def find_start_points_optimum(C, A, b):
     m = len(b)
     n = C.shape[0] # square
     ys = [np.random.choice((-1,1))*np.random.random() for i in range(m)]
+    print("ys = ", ys)
     # can we make ys to be random complex?
     # ys =[]
     # for i in range(m):
@@ -29,6 +30,7 @@ def find_start_points_optimum(C, A, b):
 
     # choose y*_{m+1} to make S* strictly positive definite
     smallest_eig = min(np.linalg.eigvals(Ss))
+    print('smallest_eig = ', smallest_eig)
     if smallest_eig <= 0:
         ymp1 = smallest_eig - 1
         Amp1 = np.eye(n)
@@ -281,9 +283,9 @@ if __name__ == '__main__':
     
     # read data from file located in examples: C, A, b
     cwd = os.getcwd()
-    example_tag = '4' ## change here, also can be input on command line
+    example_tag = '6' ## change here, also can be input on command line
     example_dirname = os.path.join(cwd, 'examples')
-    mode = 1
+    mode = 2
 
     C,A,b = sdp_in.read_in_SDP(example_dirname, example_tag)
 
