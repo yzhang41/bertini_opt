@@ -283,7 +283,7 @@ if __name__ == '__main__':
     
     # read data from file located in examples: C, A, b
     cwd = os.getcwd()
-    example_tag = '6' ## change here, also can be input on command line
+    example_tag = '3' ## change here, also can be input on command line
     example_dirname = os.path.join(cwd, 'examples')
     mode = 2
 
