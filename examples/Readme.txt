@@ -9,5 +9,7 @@ Example list:
 
   Ex4: Example 2.14 with alpha=1 in p.14 of the book “Semidefinite Optimization and Convex Algebraic Geometry”
 
-  Ex5: from Jon with alpha = 0.1, only for feasibility test, so bfile is unnecessary
+  Ex5: from Jon with alpha = 0.1, only for feasibility test (dual), so bfile is unnecessary
+
+  Ex6: from Jon with alpha = csrt(2), only for feasibility test (dual), so bfile is unnecessary
 
