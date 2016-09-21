@@ -1,25 +1,36 @@
 # -*- coding: UTF-8 -*-
 """
-Remark: 1. path tracking of solus to homogopy, all real solu?
-        2. three modes:
+Remark: 1. three modes:
         	mode 1: optimum_solve
-        	mode 2: feasibility_dual
-        	mode 3: feasibility_primal
+        	mode 2: feasibility_dual (does not output feasible pt for P)
+        	mode 3: feasibility_primal (does not output feasible pt for D)
         	mode 4: test
-        3. add feasibility_primal mode -- Done!
-        4. "SDP-P strict feasible" IS NOT EQUIVALENT TO "SDP-D strict feasible", cf. Example 1
+        2. "SDP-P strict feasible" IS NOT EQUIVALENT TO "SDP-D strict feasible", cf. Example 1
         time python bsdp.py
         python -m cProfile -o output bsdp.py
         python -m pstats output
         ### 09/20/2016 ###
         Next: 1. switch to user_homotopy type 2 for more information instead of stopping program
+        		 -- done!
         	  2. construct examples s.t. the inf. of (SDP-P)_2 is 0, but not achieved. see what will happen for the prog.
+        	     -- done!
+        	  3. using homotopy:2
+        	     Ex1-Ex3 works ok for all modes
+        	     Ex4: mode 1 outputs complex solution
+        	          mode 2 and 3 work ok
+        	     Ex6: ONLY for feasibility_test_dual (mode 2)
+        	          mode 2 works ok
+				 Ex7: mode 1 outputs complex solution
+                      mode 2 works ok
+                      mode 3 fails, why?
+                 Ex8: ONLY for tests of mode 1 and mode 3
+                      mode 1 outputs complex solution
+                      mode 3 outputs complex solution
+                 EndGame?
         Remark: Priaml-Dual IPM needs strictly interior points for both P and D problems
                 Our homotopy mehotd does not need strictly IP as start, although we need to assume at least one of P and D is strictly feasible!
-                But so far our method needs optimums for both P and D are achievable. Otherwise, some inf. coordinate
-                 --switch to user_defined_homotopy: 2? The result is NOT good, why?
+                But so far our method needs optimums for both P and D are achievable. Otherwise, some inf. coordinate                 
 """		
-
 import collections
 import os
 import numpy as np
@@ -222,7 +233,7 @@ def compute_optimum(C, A, b, mode):
 
 	#startpoints = [bertini.Point(Xpoints + Spoints + ys)]
 	startpoints = [bertini.Point(Xpoints + ys)]
-	bertini.write_bertini_input_file(dirname, variable_group, constants, subfunctions, functions, parameters={'mu':'t'}, pathvariables=['t'], options={"UserHomotopy":1})
+	bertini.write_bertini_input_file(dirname, variable_group, constants, subfunctions, functions, parameters={'mu':'t'}, pathvariables=['t'], options={"UserHomotopy":2, "SecurityLevel":1})
 	bertini.write_bertini_start_file(dirname, startpoints)
 	bertini.run_bertini(dirname, "optimum") # optimum mode
 
@@ -236,6 +247,23 @@ def compute_optimum(C, A, b, mode):
 	ycoords = optimum.coordinates[int(n*(n+1)/2):]
 	
 	## add warning if X, S and y are "not" real!
+	#isComplex1 = [np.iscomplex(i) for i in Xcoords]
+	#print("\nisComplex for Xvariables?:",isComplex1)
+	#isComplex2 = [np.iscomplex(i) for i in ycoords]
+	#print("isComplex for yvariables?:",isComplex2)
+	# for i,j in zip(isComplex1, isComplex2):
+	# 	if i == True or j == True:
+	# 		print("Warning: non-real solution!")
+	# 		break
+	tol = 1.0e-10 # change here if necessary
+	Xcoords_imag = [z.imag for z in Xcoords]
+	normX = np.linalg.norm(Xcoords_imag)
+	ycoords_imag = [z.imag for z in ycoords]
+	normy = np.linalg.norm(ycoords_imag)
+	if max(normX, normy) > tol:
+		print("\nWarning: non-real solution!")
+		print("Output info. in postprocessing stage is incorrect!")
+
 	X = np.matrix(np.zeros((n,n)))
 	S = np.matrix(np.zeros((n,n)))
 	k = 0
@@ -352,13 +380,9 @@ def postprocess(X,y,S,C,A,b):
 if __name__ == '__main__':
 	## set up parameters here
 	## cf. /examples/readme.txt for more details
-	## mode 1: optimum_solve
-	## mode 2: feasibility_dual
-	## mode 3: feasibility_primal
-	## mode 4: other test mode
 	mode_dict = { '1':'optimum_solve', '2':'feasibility_test_dual', '3':'feasibility_test_primal', '4':'other test' }
-	example_tag = '7' ## change here, also can be input on command line
-	mode = 1
+	example_tag = '8' ## change here, also can be input on command line
+	mode = 3
 
 	print('---------------Example {0}-------------------'.format(example_tag))
 	print('---------------mode {0}: {1}-------------------'.format(mode, mode_dict[str(mode)]))
@@ -409,6 +433,9 @@ if __name__ == '__main__':
 		else: #==0?
 			print("Two possible cases for Dual of SDP:\n feasible, but not strict feasible \n OR infeasible")
 			print("(SDP-D): C - sum{yi*Ai} - eps*Id >= 0 is infeasible, C - sum{yi*Ai} + eps*Id >= 0 is feasible!")
+		print(X)
+		print(S)
+		print(min(np.linalg.eigvals(S)))
 
 	if mode == 3: # feasibility_primal
 		X,y,S = compute_feasibility_primal(C, A[:], b, mode)
