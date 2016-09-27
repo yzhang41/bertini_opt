@@ -1,12 +1,36 @@
+# -*- coding: UTF-8 -*-
 """
-Remark: 1. path tracking of solus to homogopy, all real solu?
-        2. three modes:
+Remark: 1. three modes:
         	mode 1: optimum_solve
-        	mode 2: feasibility_dual
-        	mode 3: feasibility_primal
+        	mode 2: feasibility_dual (does not output feasible pt for P)
+        	mode 3: feasibility_primal (does not output feasible pt for D)
         	mode 4: test
-        3. next task: add feasibility_primal mode
-"""
+        2. "SDP-P strict feasible" IS NOT EQUIVALENT TO "SDP-D strict feasible", cf. Example 1
+        time python bsdp.py
+        python -m cProfile -o output bsdp.py
+        python -m pstats output
+        ### 09/20/2016 ###
+        Next: 1. switch to user_homotopy type 2 for more information instead of stopping program
+        		 -- done!
+        	  2. construct examples s.t. the inf. of (SDP-P)_2 is 0, but not achieved. see what will happen for the prog.
+        	     -- done!
+        	  3. using homotopy:2
+        	     Ex1-Ex3 works ok for all modes
+        	     Ex4: mode 1 outputs complex solution
+        	          mode 2 and 3 work ok
+        	     Ex6: ONLY for feasibility_test_dual (mode 2)
+        	          mode 2 works ok
+				 Ex7: mode 1 outputs complex solution
+                      mode 2 works ok
+                      mode 3 fails, why?
+                 Ex8: ONLY for tests of mode 1 and mode 3
+                      mode 1 outputs complex solution
+                      mode 3 outputs complex solution
+                 EndGame?
+        Remark: Priaml-Dual IPM needs strictly interior points for both P and D problems
+                Our homotopy mehotd does not need strictly IP as start, although we need to assume at least one of P and D is strictly feasible!
+                But so far our method needs optimums for both P and D are achievable. Otherwise, some inf. coordinate                 
+"""		
 import collections
 import os
 import numpy as np
@@ -35,22 +59,15 @@ def test_linear_depend(A, *args):
 	n = A[0].shape[0] # square
 	M = np.zeros((m,int(n*(n+1)/2))) # row-major data for efficiency?
 	for i in range(m):
-		tempA = A[i]
-		# print(tempA)
-		# a = tempA[np.triu_indices(n)]
-		# print(a)
-		M[i,:] = tempA[np.triu_indices(n)]
+		M[i,:] = A[i][np.triu_indices(n)]
 	for item in args: # args is a tuple
 		M = np.vstack([M, item[np.triu_indices(n)]])
 		m += 1
 	rank = np.linalg.matrix_rank(M)
-	#print(rank, m)
 
 	return rank < m # if this True, then linear dependent
 
-## write a separate function for D-SDP feasibility test?
-## if I = \sum A_i c_i, then ... we arrive a conclusion, no need to continue?
-def find_start_points_optimum(C, A, b, mode): ## write a separate function for D-SDP feasibility test?
+def find_start_points_optimum(C, A, b, mode):
 	# reshape feasible set
 	m = len(b)
 	n = C.shape[0] # square
@@ -58,42 +75,49 @@ def find_start_points_optimum(C, A, b, mode): ## write a separate function for D
 	#print("ys = ", ys)
 	Ss = C - sum([ys[i]*A[i] for i in range(m)], np.zeros((n,n)))
 
+	# enlarge ys for mode 3 (feasibility_primal)
+	if mode == 3:
+		ys.append(np.random.choice((-1,1))*np.random.random())
+	# now len(ys) = m+1, the last variable represents lambda
+
 	# choose y*_{m+1} to make S* strictly positive definite
 	smallest_eig = min(np.linalg.eigvals(Ss))
 	#print('smallest_eig = ', smallest_eig)
 	if smallest_eig <= 0:
-	    ymp1 = smallest_eig - 1
+	    ysmp1 = smallest_eig - 1
 	    Amp1 = np.eye(n)
 	else:
-	    ymp1 = 0
+	    ysmp1 = 0
 	    Amp1 = np.zeros((n,n))
 	if mode == 2: # feasibility_dual mode
-		if ymp1 == 0 and ys[m-1] > 0: # ys[m-1] is ys_{m+1}
+		if ysmp1 == 0 and ys[m-1] > 0: # ys[m-1] is origional ys_{m+1}
 			print('ys_(m+1) = {0} > 0 and hence SDP-D is strictly feasible'.format(ys[m-1]))
 			print('Early exit in ' + find_start_points_optimum.__name__)
 			exit() ## using exit()? since the task is DONE!
 
 	# compute S*, X*, b*
-	#print("ymp1 = ", ymp1)
-	#print("Ss = ", Ss)
-	Ss -= ymp1*Amp1 # make it to be "-"
-	#print("Ss =", Ss)
+	Ss -= ysmp1*Amp1 # make it to be "-"
 	Xs = np.linalg.inv(Ss)
-	# A[i]*Xs: elem-wise mult. for np.ndarray
 	bs = [(A[i]*Xs).sum() for i in range(m)]
-	#print("Xs =", Xs)
-	#print("bs = ", bs)
+	if mode == 3:
+		bs = [bs[i] - ys[m]*np.trace(A[i]) for i in range(m)]
+	trace_Ss = np.trace(Ss)
 
-	return Xs,ys,bs,ymp1
+	if mode == 3:
+		return Xs,ys,bs,ysmp1,trace_Ss # for mode 3, len(ys) = m+1 instead of m
+	else:
+		return Xs,ys,bs,ysmp1
 
 def compute_optimum(C, A, b, mode):
 	# compute start points
 	# C, A are np.2darray (full dense matrix), b is a list of float
-	# Xs: np.ndarray, ys, bs: list, ymp1 = scaler (nonpositive!)
+	# Xs: np.ndarray, ys, bs: list, ysmp1 = scaler (nonpositive!)
 	# print_data(C,A,b)
-
-	Xs,ys,bs,ymp1 = find_start_points_optimum(C, A, b, mode)
-	m = len(b)
+	if mode == 3:
+		Xs,ys,bs,ysmp1,trace_Ss = find_start_points_optimum(C, A, b, mode)
+	else:
+		Xs,ys,bs,ysmp1 = find_start_points_optimum(C, A, b, mode)
+	m = len(b) # use this, b/c in mode 3, len(y) is added \lambda at last position
 	n = C.shape[0] # square
 
 	# register constants with bertini
@@ -109,7 +133,8 @@ def compute_optimum(C, A, b, mode):
 	    constants["b{0}".format(i)] = b[i]
 	    constants["bs{0}".format(i)] = bs[i]
 
-	constants["y{0}".format(m)] = ymp1
+	#constants["y{0}".format(m)] = ymp1
+	constants["ysmp1"] = ysmp1 # use this bc y_m is reserved for \lambda in mode 3
 
 	# two sets of variables: dim(y_var)=m, dim(X_var)=(n+1)*n/2
 	yvariables = []
@@ -128,8 +153,9 @@ def compute_optimum(C, A, b, mode):
 	            eqterms.append("A{0}_{1}_{2}*y{0}".format(i,j,k))
 	        g = " - ".join(eqterms)
 	        if j == k:
-	            g += " - y{0}*mu".format(m) # make it to be "-"
+	            g += " - ysmp1*mu" # make it to be "- ysmp1 * mu"
 	        subfunctions["S{0}_{1}".format(j,k)] = g
+	#del eqterms # need this?
 
 	# two set of eqns
 	functions = collections.OrderedDict()
@@ -145,7 +171,27 @@ def compute_optimum(C, A, b, mode):
 	            eqterms.append("2*A{0}_{1}_{2}*X{1}_{2}".format(i,j,k))
 	    functions["f{0}".format(i)] = " + ".join(eqterms) + " - b{0}*(1 - mu) - bs{0}*mu".format(i)
 
+	# modify first set of eqns. for mode 3
+	if mode == 3:
+		for i in range(m):
+			eqterms = []
+			for j in range(n):
+				eqterms.append("y{0} * A{1}_{2}_{2}".format(m,i,j))
+			add_terms = " - " + " - ".join(eqterms)
+			functions["f{0}".format(i)] += add_terms
+
+	# for mode 3, add one more eqn to f[m]: S \cdot I - 1 - \mu * trace(Ss) = 0
+	# add variable lambda to yvariables y[m]
+	if mode == 3:
+		yvariables.append("y{0}".format(m))
+		eqterms = [] # waster a lot of old eqterms??? modify later for efficiency
+		for i in range(n):
+			eqterms.append("S{0}_{0}".format(i))
+		#print(eqterms)
+		functions["f{0}".format(m)] = "+".join(eqterms) + " - 1 - mu * {0}".format(trace_Ss-1.0)
+
 	# second set ((n+1)*n/2 eqns): S.dot(X) - \mu * Id
+	# for mode 3, it is S.dot(X + \lambda I) - \mu * Id
 	# only upper tri. part of S and X
 	for i in range(n):
 	    for j in range(i,n):
@@ -163,8 +209,9 @@ def compute_optimum(C, A, b, mode):
 	            h = " + ".join(eqterms) + " - mu"
 	        else:
 	            h = " + ".join(eqterms)
+	        # if mode == 3:
+	        # 	h += " + y{0}*S{1}_{2}".format(m,i,j) # y[m] is \lambda
 	        functions["h{0}_{1}".format(i,j)] = h
-
 
 	variable_group = Xvariables + yvariables
 	# write out the input files
@@ -186,7 +233,7 @@ def compute_optimum(C, A, b, mode):
 
 	#startpoints = [bertini.Point(Xpoints + Spoints + ys)]
 	startpoints = [bertini.Point(Xpoints + ys)]
-	bertini.write_bertini_input_file(dirname, variable_group, constants, subfunctions, functions, parameters={'mu':'t'}, pathvariables=['t'], options={"UserHomotopy":1})
+	bertini.write_bertini_input_file(dirname, variable_group, constants, subfunctions, functions, parameters={'mu':'t'}, pathvariables=['t'], options={"UserHomotopy":2, "SecurityLevel":1})
 	bertini.write_bertini_start_file(dirname, startpoints)
 	bertini.run_bertini(dirname, "optimum") # optimum mode
 
@@ -197,9 +244,26 @@ def compute_optimum(C, A, b, mode):
 
 	Xcoords = optimum.coordinates[:int(n*(n+1)/2)]
 	#Scoords = optimum.coordinates[int(n*(n+1)/2):n*(n+1)]
-	ycoords = optimum.coordinates[-m:]
+	ycoords = optimum.coordinates[int(n*(n+1)/2):]
 	
 	## add warning if X, S and y are "not" real!
+	#isComplex1 = [np.iscomplex(i) for i in Xcoords]
+	#print("\nisComplex for Xvariables?:",isComplex1)
+	#isComplex2 = [np.iscomplex(i) for i in ycoords]
+	#print("isComplex for yvariables?:",isComplex2)
+	# for i,j in zip(isComplex1, isComplex2):
+	# 	if i == True or j == True:
+	# 		print("Warning: non-real solution!")
+	# 		break
+	tol = 1.0e-10 # change here if necessary
+	Xcoords_imag = [z.imag for z in Xcoords]
+	normX = np.linalg.norm(Xcoords_imag)
+	ycoords_imag = [z.imag for z in ycoords]
+	normy = np.linalg.norm(ycoords_imag)
+	if max(normX, normy) > tol:
+		print("\nWarning: non-real solution!")
+		print("Output info. in postprocessing stage is incorrect!")
+
 	X = np.matrix(np.zeros((n,n)))
 	S = np.matrix(np.zeros((n,n)))
 	k = 0
@@ -211,6 +275,7 @@ def compute_optimum(C, A, b, mode):
 	        k += 1
 	
 	return X,y,S # return np.matrix, np.array
+	# in mode 3, y[m] is lambda!
 
 def compute_feasibility_dual(C, A, b, mode):
 	# max y_{m+1} s.t. C - \sum Ai*yi - I*y_{m+1} >= 0
@@ -218,21 +283,12 @@ def compute_feasibility_dual(C, A, b, mode):
 	## enlarge b and A, A[m+1] = I
 
 	n = C.shape[0] # square
-
-	# first check linear dependence of A_i
-	# this step can be skipped if A_i are already linearly indepenent
-	# but there is no harm doing it for small test problem
-	linear_depend_info1 = test_linear_depend(A)
-	if linear_depend_info1:
-		print('Please remove redundacy between A_i (i=1,...,m) before running this code!')
-		print('Early exit in ' + compute_feasibility_dual.__name__)
-		exit()
-
-	# second check whether I is a linear combination of A_i's
+	# check whether I is a linear combination of A_i's
 	# if so, we come to a conclusion: SDP-D is strictly feasible (can be proved straightforwardly!)
 	# no need to continue computing in this case!
-	linear_depend_info2 = test_linear_depend(A, np.eye(n))
-	if linear_depend_info2:
+	# If C > 0, then it is strict feasible immediately (set y_i = 0 for all i)
+	linear_depend_info = test_linear_depend(A, np.eye(n))
+	if linear_depend_info:
 		print('Identity matrix is a linear combination of A_i (i=1,...,m)')
 		print('Hence SDP-D is strictly feasible!')
 		print('Early exit in ' + compute_feasibility_dual.__name__)
@@ -248,6 +304,21 @@ def compute_feasibility_dual(C, A, b, mode):
 	X,y,S = compute_optimum(C,A,b,mode)
 
 	return X,y,S # len(y) == m+1
+
+def compute_feasibility_primal(C, A, b, mode):
+	"""
+	min \lambda { X + \lambda I >= 0, A_i \cdot X = b_i, i=1,...,m }
+	add one more primal variable \lambda, this new variable will append to the last of yvariables
+	this will bring one more constraint eqn. into the KKT system: S \cdot I - 1 = 0
+	Set C = 0
+	Remark: note that here we use X to represent X + \lambda I, hence we need to modify the first set of eqns.
+	"""
+	n = C.shape[0] # square
+	C = np.zeros((n,n)) # or change in the homotopy section to remove C-info.
+	# for convenience, set C = 0 to reuse the code
+	X,y,S = compute_optimum(C,A,b,mode)
+
+	return X,y,S # y[m] is lambda in mode 3!
 
 def postprocess(X,y,S,C,A,b):
 	"""
@@ -304,57 +375,105 @@ def postprocess(X,y,S,C,A,b):
 	dual_obj_value = np.dot(b, y)
 	print('dual objective value = {0}'.format(dual_obj_value))
 	print('duality gap = {0}'.format(primal_obj_value - dual_obj_value))
-	print('')
-
 
 # main function (for test purpose)
 if __name__ == '__main__':
 	## set up parameters here
 	## cf. /examples/readme.txt for more details
-    ## mode 1: optimum_solve
-    ## mode 2: feasibility_dual
-    ## mode 3: feasibility_primal
-    ## mode 4: other test mode
-	example_tag = '6' ## change here, also can be input on command line
-	mode = 2
-    
+	mode_dict = { '1':'optimum_solve', '2':'feasibility_test_dual', '3':'feasibility_test_primal', '4':'other test' }
+	example_tag = '8' ## change here, also can be input on command line
+	mode = 3
+
+	print('---------------Example {0}-------------------'.format(example_tag))
+	print('---------------mode {0}: {1}-------------------'.format(mode, mode_dict[str(mode)]))
+
     # read data from file located in examples: C, A, b
 	cwd = os.getcwd()
 	example_dirname = os.path.join(cwd, 'examples')
 	C,A,b = sdp_in.read_in_SDP(example_dirname, example_tag)
     ## do the test to modify A, b if necessary: remove redunacy of A_i? -- not the goal of this project
 
+	# task 0: first check linear dependence of A_i
+	# this step can be skipped if A_i are already linearly indepenent
+	# but there is no harm doing it for small test problem
+	linear_depend_info = test_linear_depend(A)
+	if linear_depend_info:
+		print('Please remove redundacy between A_i (i=1,...,m) before running this code!')
+		print('Early exit in ' + __name__)
+		exit()
+
     # task 1: optimum solve
 	if mode == 1:
 		X,y,S = compute_optimum(C, A, b, mode)
-	    # postprocessing
-	    # print_data(C,A,b)
-		print('\n---------------Postprocessing: for small problem-------------------')
+		# postprocessing
+		# print_data(C,A,b)
+		print('\n---------------Output: postprocessing: for small problem-------------------')
 		postprocess(X,y,S,C,A[:],b) # pass a copy of A: A[:]
+		print('X=',X)
 		# C,A,b will not change after this call
 		# if the data A is large, just pass A as "reference"
 		## fix this later to make it more clear and efficient!
 
-    # task 2: feasibility_dual
+	# task 2: feasibility_dual
 	if mode == 2:
-		print('\n---------------Feasibility Test for SDP_D-------------------')
 		X,y,S = compute_feasibility_dual(C, A[:], b, mode) # len(b) == m
 		## output: len(y) == m+1
+		print('\n---------------Output: feasibility Test for SDP_D-------------------')
 		last_idx = len(b) # == len(y) - 1
 		eps = 1.0e-10 # change here if necessary
-		print("max y_m+1 = {0}, eps = {1}".format(y[last_idx], eps))
+		print("optimal dual obj. value: max y_m+1 = {0}".format(y[last_idx]))
+		optimal_primal_value = np.multiply(np.matrix(C),X).sum()
+		print("optimal primal obj. value: C \cdot X = {0}". format(optimal_primal_value))
+		print("duality gap = {0}".format(optimal_primal_value - y[last_idx]))
+		print("eps = {0}\n".format(eps))
 		if ( y[last_idx] > eps):
 			print("Dual of SDP is strict feasible!")
 		elif (y[last_idx] < -eps):
 			print("Dual of SDP is infeasible!")
 		else: #==0?
-			print("Two cases for Dual of SDP:\n feasible, but not strict feasible \n OR infeasible")
+			print("Two possible cases for Dual of SDP:\n feasible, but not strict feasible \n OR infeasible")
+			print("(SDP-D): C - sum{yi*Ai} - eps*Id >= 0 is infeasible, C - sum{yi*Ai} + eps*Id >= 0 is feasible!")
+		print(X)
+		print(S)
+		print(min(np.linalg.eigvals(S)))
+
+	if mode == 3: # feasibility_primal
+		X,y,S = compute_feasibility_primal(C, A[:], b, mode)
+		print('\n---------------Output: feasibility Test for SDP_P-------------------')
+		n = C.shape[0]
+		m = len(b) # len(y) == m+1
+		#print(y)
+		lambd = y[m]
+		optimal_dual_value = np.dot(b, y[:m]) # check here
+		print('opt_optim_value = {0}, opt_dual_value = {1}'.format(lambd, optimal_dual_value))
+		print("duality gap = {0}".format(lambd - optimal_dual_value))
+		eps = 1.0e-10
+		print('eps = {0}'.format(eps))
+		if lambd < -eps:
+			print("Primal of SDP is strict feasible!")
+		elif lambd > eps:
+			print("Primal of SDP is infeasible!")
+		else: # ==0?
+			print("Two possible cases for Primal of SDP:\n feasible, but not strict feasible \n OR infeasible")
+			print("(SDP-P): X + eps * I >= 0  is feasible, X - eps * I >= 0 is infeasible!\n")
+		#print_data(X-y[m]*np.eye(n), A, b)
+		#print(X)
+		#print(S)
+		### THIS IS the real X we want in SDP-P!
+		print(X - y[m]*np.eye(n))
+		print(min(np.linalg.eigvals(X - y[m]*np.eye(n))))
+		#print(min(np.linalg.eigvals(S)))
+		#print(np.trace(S))
 
 	# task 4: other test
 	if mode == 4:
 		A = np.array([[1,2,3], [4,5,6], [7,8,9]])
+		print(np.trace(A))
 		print(type(A))
 		print(A)
+		A = A/(np.trace(A)/2)
+		print(A)
+		print(np.trace(A))
 		a = A[np.triu_indices(3)]
 		print(type(a))
 		print(a)
@@ -364,3 +483,10 @@ if __name__ == '__main__':
 		#A = numpy.vstack([A, newrow])
 		M = np.vstack([M, a])
 		print(M)
+
+		y = np.array([0, 1, 2, 3, 4])
+		print(y)
+		print(y[-3:])
+		print(y[:4])
+
+	print('')
