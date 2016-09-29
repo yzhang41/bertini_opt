@@ -100,6 +100,29 @@ def find_start_points_optimum(C, A, b, mode):
 	# compute S*, X*, b*
 	Ss -= ysmp1*Amp1 # make it to be "-"
 	Xs = np.linalg.inv(Ss)
+
+	if mode == 3:
+		modify_Ai = True; # default
+		for i in range(m):
+			if modify_Ai:
+				for j in range(n):
+					if A[i][j,j] != 0: # 0 --> eps?
+						modify_Ai = False;
+						break
+		if modify_Ai == True:
+			print("Warning: diag(A_i) are all 0!")
+			print("??? modify A_0 to make isolated solu. for the start system!???")
+			A0s = A[0][:] # copy!
+			A0s[0,0] = 1
+			#eqterms2 = [] # additional terms in the first eqn.
+			print(A0s) # for test!
+			print("Please modify the code:")
+			print("-- find_start_points_optimum")
+			print("-- the first equality constraint in the Homotopy")
+			print(Ss)
+			print("Exit!")
+			exit()
+
 	bs = [(A[i]*Xs).sum() for i in range(m)]
 	if mode == 3:
 		bs = [bs[i] - ys[m]*np.trace(A[i]) for i in range(m)]
@@ -169,8 +192,15 @@ def compute_optimum(C, A, b, mode):
 	    yvariables.append("y{0}".format(i))
 	    for j in range(n):
 	        eqterms.append("A{0}_{1}_{1}*X{1}_{1}".format(i,j))
+	   #      if modify_Ai and i==0:
+	   #      	if j>0:
+				# 	eqterms2.append("A{0}_{1}_{1}*{2}".format(i,j,Xs[j,j]))
+				# else: # j==0
+				# 	eqterms2.append("{0}".format(Xs[0,0]))
 	        for k in range(j+1,n):
 	            eqterms.append("2*A{0}_{1}_{2}*X{1}_{2}".format(i,j,k))
+	            # if modify_Ai and i==0:
+	            # 	eqterms2.append("2*A{0}_{1}_{2}*{3}".format(i,j,k,Xs[j,k]))
 	    functions["f{0}".format(i)] = " + ".join(eqterms) + " - b{0}*(1 - mu) - bs{0}*mu".format(i)
 
 	# modify first set of eqns. for mode 3
@@ -215,7 +245,13 @@ def compute_optimum(C, A, b, mode):
 	        # 	h += " + y{0}*S{1}_{2}".format(m,i,j) # y[m] is \lambda
 	        functions["h{0}_{1}".format(i,j)] = h
 
-	variable_group = Xvariables + yvariables
+	#variable_group = Xvariables + yvariables
+	## make variable_group to be list of list
+	if mode == 3:
+		variable_group = [Xvariables, yvariables[:len(yvariables)-1], [yvariables[len(yvariables)-1]] ]
+	else:
+		variable_group = [Xvariables, yvariables]
+
 	# write out the input files
 	dirname = "brun"
 	try:
@@ -383,7 +419,7 @@ if __name__ == '__main__':
 	## set up parameters here
 	## cf. /examples/readme.txt for more details
 	mode_dict = { '1':'optimum_solve', '2':'feasibility_test_dual', '3':'feasibility_test_primal', '4':'other test' }
-	example_tag = '8' ## change here, also can be input on command line
+	example_tag = '7' ## change here, also can be input on command line
 	mode = 3
 
 	print('---------------Example {0}-------------------'.format(example_tag))
@@ -490,5 +526,10 @@ if __name__ == '__main__':
 		print(y)
 		print(y[-3:])
 		print(y[:4])
+
+		ll = [[1,2], [3,4]]
+		print(len(ll))
+		print(ll[0], ll[1])
+		print(ll[1][:1])
 
 	print('')

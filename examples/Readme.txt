@@ -23,3 +23,10 @@ Example list:
     Remark: For this example, no matter how to choose C, X = [0,1; 1,x_22], hence det(X) = -1<0. So SDP-P is infeasible!
             switch to homotopy:2, mode 1 outputs complex solution
                                   mode 3 outputs complex solution
+  Remark of Ex7 and Ex8:
+    — we need to use different variable_group for X, y and possible lambda
+    - for Ex7, we know the “optimal” X_22 is +\infty, if we set X_22 as a separate 
+      variable_group, we can recover a very good “solution” for SDP-P.
+      If we set variable_group X_11, X_12, X_22, then X_11 and X_12 might not be accurate
+      because of dehomogenization.
+
