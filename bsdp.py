@@ -14,7 +14,7 @@ Remark: 1. three modes:
         		 -- done!
         	  2. construct examples s.t. the inf. of (SDP-P)_2 is 0, but not achieved. see what will happen for the prog.
         	     -- done!
-        	  3. using homotopy:2
+        	  3. using homotopy:2 -- variable_group Xvariables, variable_group yvariables, (if mode 3: variable_group lambda)
         	     Ex1-Ex3 works ok for all modes
         	     Ex4: mode 1 outputs complex solution
         	          mode 2 and 3 work ok
@@ -26,7 +26,9 @@ Remark: 1. three modes:
                  Ex8: ONLY for tests of mode 1 and mode 3
                       mode 1 outputs complex solution
                       mode 3 outputs complex solution
-                 EndGame?
+                 (1). EndGame?
+                 (2). our method relies on KKT, so it requires both int(P) and int(D) to be nonempty?
+                       If so, the optimums for both P and D are achievable!
         Remark: Priaml-Dual IPM needs strictly interior points for both P and D problems
                 Our homotopy mehotd does not need strictly IP as start, although we need to assume at least one of P and D is strictly feasible!
                 But so far our method needs optimums for both P and D are achievable. Otherwise, some inf. coordinate                 
@@ -180,7 +182,7 @@ def compute_optimum(C, A, b, mode):
 			add_terms = " - " + " - ".join(eqterms)
 			functions["f{0}".format(i)] += add_terms
 
-	# for mode 3, add one more eqn to f[m]: S \cdot I - 1 - \mu * trace(Ss) = 0
+	# for mode 3, add one more eqn to f[m]: S \cdot I - 1*(1-\mu) - \mu * trace(Ss) = 0
 	# add variable lambda to yvariables y[m]
 	if mode == 3:
 		yvariables.append("y{0}".format(m))
@@ -188,7 +190,7 @@ def compute_optimum(C, A, b, mode):
 		for i in range(n):
 			eqterms.append("S{0}_{0}".format(i))
 		#print(eqterms)
-		functions["f{0}".format(m)] = "+".join(eqterms) + " - 1 - mu * {0}".format(trace_Ss-1.0)
+		functions["f{0}".format(m)] = "+".join(eqterms) + " - (1 - mu) - mu * {0}".format(trace_Ss) # " - 1 - mu * {0}".format(trace_Ss-1.0)
 
 	# second set ((n+1)*n/2 eqns): S.dot(X) - \mu * Id
 	# for mode 3, it is S.dot(X + \lambda I) - \mu * Id
