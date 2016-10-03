@@ -29,9 +29,18 @@ Remark: 1. three modes:
                  (1). EndGame?
                  (2). our method relies on KKT, so it requires both int(P) and int(D) to be nonempty?
                        If so, the optimums for both P and D are achievable!
-        Remark: Priaml-Dual IPM needs strictly interior points for both P and D problems
+        Remark: Priaml-Dual IPM needs strictly interior points for both P and D problems?
                 Our homotopy mehotd does not need strictly IP as start, although we need to assume at least one of P and D is strictly feasible!
-                But so far our method needs optimums for both P and D are achievable. Otherwise, some inf. coordinate                 
+                But so far our method needs optimums for both P and D are achievable. Otherwise, some inf. coordinate   
+        NEW: about feasibility_primal test:
+        	 Step 1: check A_i \cdot X = b_i is feasible
+        	           - (SDP-P) is infeasible, DONE
+        	           - (SDP-P)_2 is strict feasible, continue
+        	 Step 2: If dual of (SDP-P)_2 is infeasible, then from strong duality theory, we have
+        	           inf of (SDP-P)_2 is -\infty, thus (SDP-P) is strict feasible, DONE
+        	           - dual of (SDP-P)_2 infeasible if and only if trace(A_i) = 0 for all i
+        	           - dual of (SDP-P)_2 feasible, continue
+        	 Step 3: CONTINUE using our homotopy method
 """		
 import collections
 import os
@@ -100,6 +109,19 @@ def find_start_points_optimum(C, A, b, mode):
 	# compute S*, X*, b*
 	Ss -= ysmp1*Amp1 # make it to be "-"
 	Xs = np.linalg.inv(Ss)
+
+	modify = False
+	if mode == 3:
+		trace_Ai_zero = True
+		for i in range(m):
+			if np.trace(A[i]) != 0:
+				trace_Ai_zero = False
+				break
+		if trace_Ai_zero:
+			print("All trace(A_i) = 0, thus dual of (SDP-P)_2 is infeasible")
+			print("inf. of (SDP-P)_2 is negative INF, thus (SDP-P) is strict feasible!")
+			exit()
+
 	bs = [(A[i]*Xs).sum() for i in range(m)]
 	if mode == 3:
 		bs = [bs[i] - ys[m]*np.trace(A[i]) for i in range(m)]
@@ -190,7 +212,7 @@ def compute_optimum(C, A, b, mode):
 		for i in range(n):
 			eqterms.append("S{0}_{0}".format(i))
 		#print(eqterms)
-		functions["f{0}".format(m)] = "+".join(eqterms) + " - (1 - mu) - mu * {0}".format(trace_Ss) # " - 1 - mu * {0}".format(trace_Ss-1.0)
+		functions["f{0}".format(m)] = " + ".join(eqterms) + " - (1 - mu) - mu * {0}".format(trace_Ss) # " - 1 - mu * {0}".format(trace_Ss-1.0)
 
 	# second set ((n+1)*n/2 eqns): S.dot(X) - \mu * Id
 	# for mode 3, it is S.dot(X + \lambda I) - \mu * Id
@@ -215,7 +237,13 @@ def compute_optimum(C, A, b, mode):
 	        # 	h += " + y{0}*S{1}_{2}".format(m,i,j) # y[m] is \lambda
 	        functions["h{0}_{1}".format(i,j)] = h
 
-	variable_group = Xvariables + yvariables
+	#variable_group = Xvariables + yvariables
+	## make variable_group to be list of list
+	if mode == 3:
+		variable_group = [Xvariables, yvariables[:len(yvariables)-1], [yvariables[len(yvariables)-1]] ]
+	else:
+		variable_group = [Xvariables, yvariables]
+
 	# write out the input files
 	dirname = "brun"
 	try:
@@ -383,7 +411,7 @@ if __name__ == '__main__':
 	## set up parameters here
 	## cf. /examples/readme.txt for more details
 	mode_dict = { '1':'optimum_solve', '2':'feasibility_test_dual', '3':'feasibility_test_primal', '4':'other test' }
-	example_tag = '8' ## change here, also can be input on command line
+	example_tag = '7' ## change here, also can be input on command line
 	mode = 3
 
 	print('---------------Example {0}-------------------'.format(example_tag))
@@ -393,7 +421,6 @@ if __name__ == '__main__':
 	cwd = os.getcwd()
 	example_dirname = os.path.join(cwd, 'examples')
 	C,A,b = sdp_in.read_in_SDP(example_dirname, example_tag)
-    ## do the test to modify A, b if necessary: remove redunacy of A_i? -- not the goal of this project
 
 	# task 0: first check linear dependence of A_i
 	# this step can be skipped if A_i are already linearly indepenent
@@ -442,6 +469,12 @@ if __name__ == '__main__':
 	if mode == 3: # feasibility_primal
 		X,y,S = compute_feasibility_primal(C, A[:], b, mode)
 		print('\n---------------Output: feasibility Test for SDP_P-------------------')
+		### update here! ###
+		#test feasibility of A_i \cdot X = b_i
+		#if not feasible, print("A_i \cdot X = b_i, i = 1,...,m are infeasible")
+		#print("(SDP-P) is infeasible!")
+		#exit()
+		###
 		n = C.shape[0]
 		m = len(b) # len(y) == m+1
 		#print(y)
@@ -490,5 +523,10 @@ if __name__ == '__main__':
 		print(y)
 		print(y[-3:])
 		print(y[:4])
+
+		ll = [[1,2], [3,4]]
+		print(len(ll))
+		print(ll[0], ll[1])
+		print(ll[1][:1])
 
 	print('')
