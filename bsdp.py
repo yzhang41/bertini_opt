@@ -16,13 +16,14 @@ Remark: 1. three modes:
         	     -- done!
         	  3. using homotopy:2 -- variable_group Xvariables, variable_group yvariables, (if mode 3: variable_group lambda)
         	     Ex1-Ex3 works ok for all modes
+        	          -- Ex1, mode 1, output of y are different for each run, Lagrange multiplier is NOT unique
         	     Ex4: mode 1 outputs complex solution
         	          mode 2 and 3 work ok
         	     Ex6: ONLY for feasibility_test_dual (mode 2)
         	          mode 2 works ok
 				 Ex7: mode 1 outputs complex solution
                       mode 2 works ok
-                      mode 3 fails, why?
+                      mode 3 now works
                  Ex8: ONLY for tests of mode 1 and mode 3
                       mode 1 outputs complex solution
                       mode 3 outputs complex solution
@@ -75,8 +76,50 @@ def test_linear_depend(A, *args):
 		M = np.vstack([M, item[np.triu_indices(n)]])
 		m += 1
 	rank = np.linalg.matrix_rank(M)
+	r = min(m, int(n*(n+1)/2))
 
-	return rank < m # if this True, then linear dependent
+	return rank < r # if this True, then linear dependent
+
+def test_feasibility_equality(A,b):
+	"""
+	test feasibility of A_i \cdot X = b_i, i = 1,...,m
+	Since A_i are already linearly independent, it's not necessary to solve them directly!
+	"""
+	m = len(A)
+	n = A[0].shape[0] # square
+	N = int(n*(n+1)/2)
+	feasible = False
+	if m<=N:
+		print("m <= n(n+1)/2, underdetermined or square system for equality constraints")
+		print("Since A_i are already linearly independent")
+		print("A_i \cdot X = b_i, i = 1,...,m is always feasible!")
+		print("Continue...")
+	elif m>N:
+		print("Warning: m > n(n+1)/2, overdetermined system for equality constraints")
+		print("Warning: waiting to be tested!")
+		M = np.zeros((m,N))
+		for i in range(m):
+			idx = 0
+			for j in range(n):
+				for k in range(j,n):
+					if j==k:
+						M[i,idx] = A[i][j,k]
+					else:
+						M[i,idx] = 2*A[i][j,k]
+					idx += 1
+			if idx != N-1:
+				print("idx error!")
+				exit()
+		x_lstsq = np.linalg.lstsq(A,b)[0]
+		residual = np.linalg.norm(np.dot(M,x_lstsq) - b)
+		print("residual = {0}".format(residual))
+		tol = 1.0e-8
+		if abs(residual) > tol:
+			print("residual too big, exit")
+			exit()
+		# Q,R = linalg.qr(A) # qr decomposition of A
+		# Qb = dot(Q.T,b) # computing Q^T*b (project b onto the range of A)
+		# x_qr = linalg.solve(R,Qb) # solving R*x = Q^T*b
 
 def find_start_points_optimum(C, A, b, mode):
 	# reshape feasible set
@@ -431,6 +474,13 @@ if __name__ == '__main__':
 		print('Early exit in ' + __name__)
 		exit()
 
+	# test feasibility of A_i \cdot X = b_i
+	test_feasibility_equality(A,b)
+	# if not feasible, print("A_i \cdot X = b_i, i = 1,...,m are infeasible")
+	# print("(SDP-P) is infeasible!")
+	# exit()
+	# ##
+
     # task 1: optimum solve
 	if mode == 1:
 		X,y,S = compute_optimum(C, A, b, mode)
@@ -439,6 +489,7 @@ if __name__ == '__main__':
 		print('\n---------------Output: postprocessing: for small problem-------------------')
 		postprocess(X,y,S,C,A[:],b) # pass a copy of A: A[:]
 		print('X=',X)
+		print('y=',y)
 		# C,A,b will not change after this call
 		# if the data A is large, just pass A as "reference"
 		## fix this later to make it more clear and efficient!
@@ -469,12 +520,6 @@ if __name__ == '__main__':
 	if mode == 3: # feasibility_primal
 		X,y,S = compute_feasibility_primal(C, A[:], b, mode)
 		print('\n---------------Output: feasibility Test for SDP_P-------------------')
-		### update here! ###
-		#test feasibility of A_i \cdot X = b_i
-		#if not feasible, print("A_i \cdot X = b_i, i = 1,...,m are infeasible")
-		#print("(SDP-P) is infeasible!")
-		#exit()
-		###
 		n = C.shape[0]
 		m = len(b) # len(y) == m+1
 		#print(y)
