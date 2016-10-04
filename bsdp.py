@@ -27,6 +27,9 @@ Remark: 1. three modes:
                  Ex8: ONLY for tests of mode 1 and mode 3
                       mode 1 outputs complex solution
                       mode 3 outputs complex solution
+                 Ex9: mode 1: sometimes fails, otherwise output complex solu. (wrong info.)
+                 	  mode 2: works ok, and output infeasible
+                 	  mode 3: strict feasible! (need to call mode 2, and then mode 3)
                  (1). EndGame?
                  (2). our method relies on KKT, so it requires both int(P) and int(D) to be nonempty?
                        If so, the optimums for both P and D are achievable!
@@ -39,9 +42,19 @@ Remark: 1. three modes:
         	           - (SDP-P)_2 is strict feasible, continue
         	 Step 2: If dual of (SDP-P)_2 is infeasible, then from strong duality theory, we have
         	           inf of (SDP-P)_2 is -\infty, thus (SDP-P) is strict feasible, DONE
-        	           - dual of (SDP-P)_2 infeasible if and only if trace(A_i) = 0 for all i
-        	           - dual of (SDP-P)_2 feasible, continue
+        	           - call a sub_dual_feasibility_test for - \sum y_i * A_i - S = 0, S >= 0
+        	           - if it is strict feasible, then dual of (SDP-P)_2 is strict feasible, continue to Step 3
+        	           - if it is only feasible and S (>=0) is not 0 matrix ...
+        	              then dual of (SDP-P)_2 is feasible, continue to Step 3
+        	             if it only feasible and S = 0, then dual of (SDP-P)_2 is infeasible!
+        	           - if it is infeasible, then of course dual of (SDP-P)_2 is infeasible!
+        	           ###- dual of (SDP-P)_2 infeasible if trace(A_i) = 0 for all i (included in the last case above)
+        	           - dual of (SDP-P)_2 feasible, continue to Step 3
         	 Step 3: CONTINUE using our homotopy method
+  		NEW2: methodology: check feasibility of (SDP-P) (call mode 3 (possibly call mode 2 internal)) and (SDP-D) (call mode 2) ...
+  				if both feasible and at least one strict feasible, run mode 1
+  		Remark:	The reason in mode 3 needs to call mode 2 is that: our homotopy method is kind based on the Dual problem ...
+  			  	  so we really need the ceratin Dual to be feasible! That's why to run mode 1 we need to call mode 1 and mode 2 first!
 """		
 import collections
 import os
@@ -147,23 +160,24 @@ def find_start_points_optimum(C, A, b, mode):
 		if ysmp1 == 0 and ys[m-1] > 0: # ys[m-1] is origional ys_{m+1}
 			print('ys_(m+1) = {0} > 0 and hence SDP-D is strictly feasible'.format(ys[m-1]))
 			print('Early exit in ' + find_start_points_optimum.__name__)
-			exit() ## using exit()? since the task is DONE!
+			print('Still continue, ok! If only do the SDP-D feasibility test, we can exit here!')
+			print('---')
+			#exit() ## using exit()? since the task is DONE!
 
 	# compute S*, X*, b*
 	Ss -= ysmp1*Amp1 # make it to be "-"
 	Xs = np.linalg.inv(Ss)
 
-	modify = False
-	if mode == 3:
-		trace_Ai_zero = True
-		for i in range(m):
-			if np.trace(A[i]) != 0:
-				trace_Ai_zero = False
-				break
-		if trace_Ai_zero:
-			print("All trace(A_i) = 0, thus dual of (SDP-P)_2 is infeasible")
-			print("inf. of (SDP-P)_2 is negative INF, thus (SDP-P) is strict feasible!")
-			exit()
+	# if mode == 3:
+		# trace_Ai_zero = True
+		# for i in range(m):
+		# 	if np.trace(A[i]) != 0:
+		# 		trace_Ai_zero = False
+		# 		break
+		# if trace_Ai_zero:
+		# 	print("All trace(A_i) = 0, thus dual of (SDP-P)_2 is infeasible")
+		# 	print("inf. of (SDP-P)_2 is negative INF, thus (SDP-P) is strict feasible!")
+		# 	exit()
 
 	bs = [(A[i]*Xs).sum() for i in range(m)]
 	if mode == 3:
@@ -336,6 +350,8 @@ def compute_optimum(C, A, b, mode):
 	if max(normX, normy) > tol:
 		print("\nWarning: non-real solution!")
 		print("Output info. in postprocessing stage is incorrect!")
+		print("Go to check solution files for more info., EXIT!")
+		exit()
 
 	X = np.matrix(np.zeros((n,n)))
 	S = np.matrix(np.zeros((n,n)))
@@ -350,7 +366,7 @@ def compute_optimum(C, A, b, mode):
 	return X,y,S # return np.matrix, np.array
 	# in mode 3, y[m] is lambda!
 
-def compute_feasibility_dual(C, A, b, mode):
+def compute_feasibility_dual(C, A, b, mode, nested):
 	# max y_{m+1} s.t. C - \sum Ai*yi - I*y_{m+1} >= 0
 	# => b~ = [0;...;0;1] \in \R^{m+1}
 	## enlarge b and A, A[m+1] = I
@@ -365,9 +381,16 @@ def compute_feasibility_dual(C, A, b, mode):
 		print('Identity matrix is a linear combination of A_i (i=1,...,m)')
 		print('Hence SDP-D is strictly feasible!')
 		print('Early exit in ' + compute_feasibility_dual.__name__)
-		exit()
+		print('----')
+		#exit()
+		if not nested:
+			exit()
+		else: # nested in mode 3
+			flag = True
+			return flag,flag,flag
 	else:
 		print('We can safely append A with I and modify b, continue...')
+	print('---Continue---')
 
 	# modify b, add one more dimension, but this change only affect inside comp_feasibiility
 	b = [0]*len(b) + [1] # make it to be "+"
@@ -389,6 +412,49 @@ def compute_feasibility_primal(C, A, b, mode):
 	n = C.shape[0] # square
 	C = np.zeros((n,n)) # or change in the homotopy section to remove C-info.
 	# for convenience, set C = 0 to reuse the code
+
+	## use new test for mode 3 to detect whether dual of (SDP-P)_2 is feasible or not!
+	## if dual of (SDP-P)_2 is infeasible, and (SDP_P)_2 is strict feasible (right now in this stage), then (SDP-P) is strict feasible
+	## otherwise, continue our homotopy method!
+	# call dual_feasibility_test
+	# make a copy of A and b, b/c b will be modified in mode 2!
+
+	nested = True
+	X,y,S = compute_feasibility_dual(C, A[:], b[:], 2, nested) # len(b) == m 
+	if type(X)==bool and X: # X = True
+		print("Dual of (SDP-P)_2 is strict feasible!")
+		print("---Continue---")
+	else: # not early exit in mode 2
+		## output: len(y) == m+1
+		print('\n---------------Output: feasibility Test for Dual of (SDP_P)_2-------------------')
+		last_idx = len(b) # == len(y) - 1
+		eps = 1.0e-10 # change here if necessary
+		print("optimal dual obj. value: max y_m+1 = {0}".format(y[last_idx]))
+		optimal_primal_value = np.multiply(np.matrix(C),X).sum()
+		print("optimal primal obj. value: C \cdot X = {0}". format(optimal_primal_value))
+		print("duality gap = {0}".format(optimal_primal_value - y[last_idx]))
+		print("eps = {0}\n".format(eps))
+		if ( y[last_idx] > eps):
+			print("Dual of (SDP-P)_2 is strict feasible!") # rescale to make trace(S) = 1
+		elif (y[last_idx] < -eps):
+			print("Dual of (SDP-P)_2 is infeasible!")
+			print("(SDP-P) is strict feasible!")
+			exit()
+		else: #==0?
+			print("Two possible cases for Dual of (SDP-P)_2 without trace(S) = 1:\n feasible, but not strict feasible \n OR infeasible")
+			print("Dual of (SDP-P)_2 without trace(S) = 1 : C - sum{yi*Ai} - eps*Id >= 0 is infeasible, C - sum{yi*Ai} + eps*Id >= 0 is feasible!")
+			print('S=', S)
+			print(min(np.linalg.eigvals(S)))
+			tol = 1.0e-8
+			max_elem = np.max(S)
+			if max_elem < tol:
+				print("S is almost 0 matrix, hence trace(S) = 1 is impossible!")
+				print("Dual of (SDP-P)_2 is infeasible!")
+				print("(SDP-P) is strict feasible!")
+				exit()
+
+	print("-------")
+	print("Dual of (SDP-P)_2 is at least feasible! Continue our homotopy method...")
 	X,y,S = compute_optimum(C,A,b,mode)
 
 	return X,y,S # y[m] is lambda in mode 3!
@@ -496,7 +562,7 @@ if __name__ == '__main__':
 
 	# task 2: feasibility_dual
 	if mode == 2:
-		X,y,S = compute_feasibility_dual(C, A[:], b, mode) # len(b) == m
+		X,y,S = compute_feasibility_dual(C, A[:], b, mode, False) # len(b) == m
 		## output: len(y) == m+1
 		print('\n---------------Output: feasibility Test for SDP_D-------------------')
 		last_idx = len(b) # == len(y) - 1

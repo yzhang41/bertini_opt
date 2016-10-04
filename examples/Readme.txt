@@ -30,3 +30,9 @@ Example list:
       If we set variable_group X_11, X_12, X_22, then X_11 and X_12 might not be accurate
       because of dehomogenization.
 
+  Ex9: n = 2, m = 1, SDP-P is strict feasible, SDP-D is infeasible
+        - hence p^* = d^* = -\inf
+        - mode 2 works well
+        - mode 1 “fails” b/c of SDP-D is infeasible
+	- mode 3 needs to be updated to output the info. “strict feasible”
+
