@@ -267,7 +267,16 @@ def write_bertini_input_file(dirname, variable_group, constants, subfunctions, f
         print("END;", file=fh)
         print("INPUT", file=fh)
         if "UserHomotopy" in options.keys():
-            print("variable {0};".format(",".join(map(str, variable_group))), file=fh)
+            if options["UserHomotopy"] == 1:
+                print("Error!")
+                exit()
+                #print("variable {0};".format(",".join(map(str, variable_group))), file=fh)
+            elif options["UserHomotopy"] == 2:
+                for i in range(len(variable_group)):
+                    print("variable_group {0};".format(",".join(map(str, variable_group[i]))), file=fh)
+            else:
+                print("Error!")
+                exit()
         else:
             print("variable_group {0};".format(",".join(map(str, variable_group))), file=fh)
         print("function {0};".format(",".join(map(str, functions.keys()))), file=fh) # declare functions
