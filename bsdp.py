@@ -520,8 +520,8 @@ if __name__ == '__main__':
 	## set up parameters here
 	## cf. /examples/readme.txt for more details
 	mode_dict = { '1':'optimum_solve', '2':'feasibility_test_dual', '3':'feasibility_test_primal', '4':'other test' }
-	example_tag = '7' ## change here, also can be input on command line
-	mode = 3
+	example_tag = '12' ## change here, also can be input on command line
+	mode = 1
 
 	print('---------------Example {0}-------------------'.format(example_tag))
 	print('---------------mode {0}: {1}-------------------'.format(mode, mode_dict[str(mode)]))
