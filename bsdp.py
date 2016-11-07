@@ -526,7 +526,7 @@ if __name__ == '__main__':
     ## set up parameters here
     ## cf. /examples/readme.txt for more details
     mode_dict = { '1':'optimum_solve', '2':'feasibility_test_dual', '3':'feasibility_test_primal', '4':'other test' }
-    example_tag = '10' ## change here, also can be input on command line
+    example_tag = '13' ## change here, also can be input on command line
     mode = 1
 
     print('---------------Example {0}-------------------'.format(example_tag))
