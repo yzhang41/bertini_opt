@@ -2,60 +2,14 @@
 """
 Remark: 1. three modes:
             mode 1: optimum_solve
-            mode 2: feasibility_dual (does not output feasible pt for P)
-            mode 3: feasibility_primal (does not output feasible pt for D)
+            mode 2: feasibility_dual (does not output feasible pt for P) ???
+            mode 3: feasibility_primal (does not output feasible pt for D) ???
             mode 4: test
-        2. "SDP-P strict feasible" IS NOT EQUIVALENT TO "SDP-D strict feasible", cf. Example 1
-        time python bsdp.py
+        
         python -m cProfile -o output bsdp.py
         python -m pstats output
-        ### 09/20/2016 ###
-        Next: 1. switch to user_homotopy type 2 for more information instead of stopping program
-                 -- done!
-              2. construct examples s.t. the inf. of (SDP-P)_2 is 0, but not achieved. see what will happen for the prog.
-                 -- done!
-              3. using homotopy:2 -- variable_group Xvariables, variable_group yvariables, (if mode 3: variable_group lambda)
-                 Ex1-Ex3 works ok for all modes
-                      -- Ex1, mode 1, output of y are different for each run, Lagrange multiplier is NOT unique
-                 Ex4: mode 1 outputs complex solution
-                      mode 2 and 3 work ok
-                 Ex6: ONLY for feasibility_test_dual (mode 2)
-                      mode 2 works ok
-                 Ex7: mode 1 outputs complex solution
-                      mode 2 works ok
-                      mode 3 now works
-                 Ex8: ONLY for tests of mode 1 and mode 3
-                      mode 1 outputs complex solution
-                      mode 3 outputs complex solution
-                 Ex9: mode 1: sometimes fails, otherwise output complex solu. (wrong info.)
-                       mode 2: works ok, and output infeasible
-                       mode 3: strict feasible! (need to call mode 2, and then mode 3)
-                 (1). EndGame?
-                 (2). our method relies on KKT, so it requires both int(P) and int(D) to be nonempty?
-                       If so, the optimums for both P and D are achievable!
-        Remark: Priaml-Dual IPM needs strictly interior points for both P and D problems?
-                Our homotopy mehotd does not need strictly IP as start, although we need to assume at least one of P and D is strictly feasible!
-                But so far our method needs optimums for both P and D are achievable. Otherwise, some inf. coordinate   
-        NEW: about feasibility_primal test:
-             Step 1: check A_i \cdot X = b_i is feasible
-                       - (SDP-P) is infeasible, DONE
-                       - (SDP-P)_2 is strict feasible, continue
-             Step 2: If dual of (SDP-P)_2 is infeasible, then from strong duality theory, we have
-                       inf of (SDP-P)_2 is -\infty, thus (SDP-P) is strict feasible, DONE
-                       - call a sub_dual_feasibility_test for - \sum y_i * A_i - S = 0, S >= 0
-                       - if it is strict feasible, then dual of (SDP-P)_2 is strict feasible, continue to Step 3
-                       - if it is only feasible and S (>=0) is not 0 matrix ...
-                          then dual of (SDP-P)_2 is feasible, continue to Step 3
-                         if it only feasible and S = 0, then dual of (SDP-P)_2 is infeasible!
-                       - if it is infeasible, then of course dual of (SDP-P)_2 is infeasible!
-                       ###- dual of (SDP-P)_2 infeasible if trace(A_i) = 0 for all i (included in the last case above)
-                       - dual of (SDP-P)_2 feasible, continue to Step 3
-             Step 3: CONTINUE using our homotopy method
-          NEW2: methodology: check feasibility of (SDP-P) (call mode 3 (possibly call mode 2 internal)) and (SDP-D) (call mode 2) ...
-                  if both feasible and at least one strict feasible, run mode 1
-          Remark:    The reason in mode 3 needs to call mode 2 is that: our homotopy method is kind based on the Dual problem ...
-                      so we really need the ceratin Dual to be feasible! That's why to run mode 1 we need to call mode 1 and mode 2 first!
-"""        
+        ### 11/09/2016 ###
+"""
 import collections
 import os
 import numpy as np
@@ -136,18 +90,16 @@ def test_feasibility_equality(A,b):
 
 def find_start_points_optimum(C, A, b, mode):
     # reshape feasible set
+    print('---Inside find_start_points_optimum---')
     m = len(b)
     n = C.shape[0] # square
     ys = [np.random.choice((-1,1))*np.random.random() for i in range(m)] # len(ys) == m
+    if mode == 2:
+    	ys[m-1] = 1 # the last one is modified to be 1, M = 2
     #print("ys = ", ys)
-    Ss = C - sum([ys[i]*A[i] for i in range(m)], np.zeros((n,n)))
+    Ss = C - sum([ys[i]*A[i] for i in range(m)], np.zeros((n,n))) # why need np.zeros((n,n))?
 
-    # enlarge ys for mode 3 (feasibility_primal)
-    if mode == 3:
-        ys.append(np.random.choice((-1,1))*np.random.random())
-    # now len(ys) = m+1, the last variable represents lambda
-
-    # choose y*_{m+1} to make S* strictly positive definite
+    # choose \tilde{y}:=ysmp1 to make S* strictly positive definite
     smallest_eig = min(np.linalg.eigvals(Ss))
     #print('smallest_eig = ', smallest_eig)
     if smallest_eig <= 0:
@@ -157,16 +109,16 @@ def find_start_points_optimum(C, A, b, mode):
         ysmp1 = 0
         Amp1 = np.zeros((n,n))
     if mode == 2: # feasibility_dual mode
-        if ysmp1 == 0 and ys[m-1] > 0: # ys[m-1] is origional ys_{m+1}
-            print('ys_(m+1) = {0} > 0 and hence SDP-D is strictly feasible'.format(ys[m-1]))
+        if (ys[m-1]+ysmp1) > 0: # ys[m-1] is origional ys_{m+1}
+            print('ys[m-1]+ysmp1 = {0} > 0 and hence SDP-D is strictly feasible'.format(ys[m-1]+ysmp1))
             print('Early exit in ' + find_start_points_optimum.__name__)
-            print('Still continue, ok! If only do the SDP-D feasibility test, we can exit here!')
-            print('---')
-            #exit() ## using exit()? since the task is DONE!
+            print(ys)
+            #print('Still continue, ok! If only do the SDP-D feasibility test, we can exit here!')
+            exit()
 
     # compute S*, X*, b*
     Ss -= ysmp1*Amp1 # make it to be "-"
-    Xs = np.linalg.inv(Ss)
+    Xs = np.linalg.inv(Ss) # in mode 3, Xs is  actually \tilde{Xs}
 
     # if mode == 3:
         # trace_Ai_zero = True
@@ -180,10 +132,19 @@ def find_start_points_optimum(C, A, b, mode):
         #     exit()
 
     bs = [(A[i]*Xs).sum() for i in range(m)]
-    if mode == 3:
+    if mode == 2: # modify bs[m-1]
+    	# beta_s = 1 since it is (M - ys[m-1])^{-1}, M = 2 and ys[m-1] = 1
+    	bs[m-1] = np.trace(Xs) + 1 # it seems that we do not need this info.
+    if mode == 3: # len(ys) = m+1 now since ys[m] = \lambda
+        # enlarge ys for mode 3 (feasibility_primal)
+        #ys.append(np.random.choice((-1,1))*np.random.random())
+        # Set M = 2, choose gamma_s=1>0, then lambda_s = -1
+        ys.append(-1)
+    	# now len(ys) = m+1, the last variable represents lambda
         bs = [bs[i] - ys[m]*np.trace(A[i]) for i in range(m)]
     trace_Ss = np.trace(Ss)
 
+    # ysmp1 is \tilde{y}
     if mode == 3:
         return Xs,ys,bs,ysmp1,trace_Ss # for mode 3, len(ys) = m+1 instead of m
     else:
@@ -194,11 +155,12 @@ def compute_optimum(C, A, b, mode):
     # C, A are np.2darray (full dense matrix), b is a list of float
     # Xs: np.ndarray, ys, bs: list, ysmp1 = scaler (nonpositive!)
     # print_data(C,A,b)
+    print("---Inside compute_optimum---")
     if mode == 3:
         Xs,ys,bs,ysmp1,trace_Ss = find_start_points_optimum(C, A, b, mode)
-    else:
+    else: # mode == 1 or 2
         Xs,ys,bs,ysmp1 = find_start_points_optimum(C, A, b, mode)
-    m = len(b) # use this, b/c in mode 3, len(y) is added \lambda at last position
+    m = len(b) # use this, b/c in mode 3, len(y)=m+1 (adding \lambda to the last position of y)
     n = C.shape[0] # square
 
     # register constants with bertini
@@ -215,7 +177,7 @@ def compute_optimum(C, A, b, mode):
         constants["bs{0}".format(i)] = bs[i]
 
     #constants["y{0}".format(m)] = ymp1
-    constants["ysmp1"] = ysmp1 # use this bc y_m is reserved for \lambda in mode 3
+    constants["ysmp1"] = ysmp1 # use ysmp1:=\tilde{y} bc y_m is reserved for \lambda in mode 3
 
     # two sets of variables: dim(y_var)=m, dim(X_var)=(n+1)*n/2
     yvariables = []
@@ -243,7 +205,11 @@ def compute_optimum(C, A, b, mode):
 
     # first set (m eqns): A_i \cdot X - b_i * (1-mu) - bs_i * mu
     # append y variables
-    for i in range(m):
+    if mode == 1:
+    	mm = m
+    if mode == 2:
+    	mm = m-1 # cut off the last one
+    for i in range(mm):
         eqterms = []
         yvariables.append("y{0}".format(i))
         for j in range(n):
@@ -251,29 +217,39 @@ def compute_optimum(C, A, b, mode):
             for k in range(j+1,n):
                 eqterms.append("2*A{0}_{1}_{2}*X{1}_{2}".format(i,j,k))
         functions["f{0}".format(i)] = " + ".join(eqterms) + " - b{0}*(1 - mu) - bs{0}*mu".format(i)
+    if mode == 2: # add back the m position of the equality constraint
+    	yvariables.append("y{0}".format(m-1))
+    	eqterms = []
+    	for i in range(n):
+    		eqterms.append("X{0}_{0}".format(i))
+    	# M = 2
+    	functions["f{0}".format(m-1)] = "( 1 + mu * {0} - ".format(np.trace(Xs)) + "-".join(eqterms) + ") * (2-y{0}) - mu".format(m-1)
 
     # modify first set of eqns. for mode 3
     if mode == 3:
+    	yvariables.append("y{0}".format(m)) # add variable lambda to yvariables y[m]
         for i in range(m):
-            eqterms = []
-            for j in range(n):
-                eqterms.append("y{0} * A{1}_{2}_{2}".format(m,i,j))
-            add_terms = " - " + " - ".join(eqterms)
-            functions["f{0}".format(i)] += add_terms
+        #     eqterms = []
+        #     for j in range(n):
+        #         eqterms.append("y{0} * A{1}_{2}_{2}".format(m,i,j))
+        #     add_terms = " - " + " - ".join(eqterms)
+        #     functions["f{0}".format(i)] += add_terms
+        	functions["f{0}".format(i)] += " - y{0} * {1}".format(m,np.trace(A[i]))
 
-    # for mode 3, add one more eqn to f[m]: S \cdot I - 1*(1-\mu) - \mu * trace(Ss) = 0
-    # add variable lambda to yvariables y[m]
+    # for mode 3, add one more eqn to f[m]: XXXXXX S \cdot I - 1*(1-\mu) - \mu * trace(Ss) = 0
+    # New: (1 + \mu trace(Ss) - trace(S)) * (\lambda + M) - \mu = 0
     if mode == 3:
-        yvariables.append("y{0}".format(m))
         eqterms = [] # waster a lot of old eqterms??? modify later for efficiency
         for i in range(n):
             eqterms.append("S{0}_{0}".format(i))
         #print(eqterms)
-        functions["f{0}".format(m)] = " + ".join(eqterms) + " - (1 - mu) - mu * {0}".format(trace_Ss) # " - 1 - mu * {0}".format(trace_Ss-1.0)
+        #["f{0}".format(m)] = " + ".join(eqterms) + " - (1 - mu) - mu * {0}".format(trace_Ss) 
+        # " - 1 - mu * {0}".format(trace_Ss-1.0)
+        functions["f{0}".format(m)] = "(" + "1 + mu * {0}".format(trace_Ss) + " - " + " - ".join(eqterms) + ")" + "* (y{0} + 2) - mu".format(m)
 
     # second set ((n+1)*n/2 eqns): S.dot(X) - \mu * Id
-    # for mode 3, it is S.dot(X + \lambda I) - \mu * Id
     # only upper tri. part of S and X
+    # symmetric version!
     for i in range(n):
         eqterms = []
         for k in range(n):
@@ -296,8 +272,6 @@ def compute_optimum(C, A, b, mode):
                 else:
                     eqterms.append("S{1}_{0}*X{2}_{1} + X{1}_{0}*S{2}_{1}".format(i,k,j))
                 h = " + ".join(eqterms)
-            # if mode == 3:
-            #     h += " + y{0}*S{1}_{2}".format(m,i,j) # y[m] is \lambda
             functions["h{0}_{1}".format(i,j)] = h
 
     #variable_group = Xvariables + yvariables
@@ -350,14 +324,16 @@ def compute_optimum(C, A, b, mode):
     #         break
     tol = 1.0e-10 # change here if necessary
     Xcoords_imag = [z.imag for z in Xcoords]
-    normX = np.linalg.norm(Xcoords_imag)
+    normX_imag = np.linalg.norm(Xcoords_imag)
     ycoords_imag = [z.imag for z in ycoords]
-    normy = np.linalg.norm(ycoords_imag)
-    if max(normX, normy) > tol:
-        print("\nWarning: non-real solution!")
+    normy_imag = np.linalg.norm(ycoords_imag)
+    if normX_imag > tol:
+        print("\nWarning: non-real solution for X!")
+    if normy_imag > tol:
+        print("\nWarning: non-real solution for y!") # if y is real, then S is of course real!
+    if max(normX_imag,normy_imag) > tol:
         print("Output info. in postprocessing stage is incorrect!")
-        print("Go to check solution files for more info., EXIT!")
-        exit()
+        print("Go to check solution files for more info!")    	
 
     X = np.matrix(np.zeros((n,n)))
     S = np.matrix(np.zeros((n,n)))
@@ -372,11 +348,12 @@ def compute_optimum(C, A, b, mode):
     return X,y,S # return np.matrix, np.array
     # in mode 3, y[m] is lambda!
 
-def compute_feasibility_dual(C, A, b, mode, nested):
+def compute_feasibility_dual(C, A, b, mode):
     # max y_{m+1} s.t. C - \sum Ai*yi - I*y_{m+1} >= 0
     # => b~ = [0;...;0;1] \in \R^{m+1}
     ## enlarge b and A, A[m+1] = I
 
+    print('---Inside compute_feasibility_dual---')
     n = C.shape[0] # square
     # check whether I is a linear combination of A_i's
     # if so, we come to a conclusion: SDP-D is strictly feasible (can be proved straightforwardly!)
@@ -387,18 +364,13 @@ def compute_feasibility_dual(C, A, b, mode, nested):
         print('Identity matrix is a linear combination of A_i (i=1,...,m)')
         print('Hence SDP-D is strictly feasible!')
         print('Early exit in ' + compute_feasibility_dual.__name__)
-        print('----')
-        #exit()
-        if not nested:
-            exit()
-        else: # nested in mode 3
-            flag = True
-            return flag,flag,flag
+        #print('----')
+        exit()
     else:
         print('We can safely append A with I and modify b, continue...')
     print('---Continue---')
 
-    # modify b, add one more dimension, but this change only affect inside comp_feasibiility
+    # modify b, add one more dimension, but this change only affect inside comp_feasibiility_dual, why???
     b = [0]*len(b) + [1] # make it to be "+"
     # modify A, add one more dimension
     A.append(np.eye(n)) # this modification will affect outside this function if A (not A[:]) is passed in
@@ -415,52 +387,11 @@ def compute_feasibility_primal(C, A, b, mode):
     Set C = 0
     Remark: note that here we use X to represent X + \lambda I, hence we need to modify the first set of eqns.
     """
+    print('---Inside compute_feasibility_primal---')
     n = C.shape[0] # square
     C = np.zeros((n,n)) # or change in the homotopy section to remove C-info.
     # for convenience, set C = 0 to reuse the code
 
-    ## use new test for mode 3 to detect whether dual of (SDP-P)_2 is feasible or not!
-    ## if dual of (SDP-P)_2 is infeasible, and (SDP_P)_2 is strict feasible (right now in this stage), then (SDP-P) is strict feasible
-    ## otherwise, continue our homotopy method!
-    # call dual_feasibility_test
-    # make a copy of A and b, b/c b will be modified in mode 2!
-
-    nested = True
-    X,y,S = compute_feasibility_dual(C, A[:], b[:], 2, nested) # len(b) == m 
-    if type(X)==bool and X: # X = True
-        print("Dual of (SDP-P)_2 is strict feasible!")
-        print("---Continue---")
-    else: # not early exit in mode 2
-        ## output: len(y) == m+1
-        print('\n---------------Output: feasibility Test for Dual of (SDP_P)_2-------------------')
-        last_idx = len(b) # == len(y) - 1
-        eps = 1.0e-10 # change here if necessary
-        print("optimal dual obj. value: max y_m+1 = {0}".format(y[last_idx]))
-        optimal_primal_value = np.multiply(np.matrix(C),X).sum()
-        print("optimal primal obj. value: C \cdot X = {0}". format(optimal_primal_value))
-        print("duality gap = {0}".format(optimal_primal_value - y[last_idx]))
-        print("eps = {0}\n".format(eps))
-        if ( y[last_idx] > eps):
-            print("Dual of (SDP-P)_2 is strict feasible!") # rescale to make trace(S) = 1
-        elif (y[last_idx] < -eps):
-            print("Dual of (SDP-P)_2 is infeasible!")
-            print("(SDP-P) is strict feasible!")
-            exit()
-        else: #==0?
-            print("Two possible cases for Dual of (SDP-P)_2 without trace(S) = 1:\n feasible, but not strict feasible \n OR infeasible")
-            print("Dual of (SDP-P)_2 without trace(S) = 1 : C - sum{yi*Ai} - eps*Id >= 0 is infeasible, C - sum{yi*Ai} + eps*Id >= 0 is feasible!")
-            print('S=', S)
-            print(min(np.linalg.eigvals(S)))
-            tol = 1.0e-8
-            max_elem = np.max(S)
-            if max_elem < tol:
-                print("S is almost 0 matrix, hence trace(S) = 1 is impossible!")
-                print("Dual of (SDP-P)_2 is infeasible!")
-                print("(SDP-P) is strict feasible!")
-                exit()
-
-    print("-------")
-    print("Dual of (SDP-P)_2 is at least feasible! Continue our homotopy method...")
     X,y,S = compute_optimum(C,A,b,mode)
 
     return X,y,S # y[m] is lambda in mode 3!
@@ -526,8 +457,8 @@ if __name__ == '__main__':
     ## set up parameters here
     ## cf. /examples/readme.txt for more details
     mode_dict = { '1':'optimum_solve', '2':'feasibility_test_dual', '3':'feasibility_test_primal', '4':'other test' }
-    example_tag = '13' ## change here, also can be input on command line
-    mode = 1
+    example_tag = '9' ## change here, also can be input on command line
+    mode = 2
 
     print('---------------Example {0}-------------------'.format(example_tag))
     print('---------------mode {0}: {1}-------------------'.format(mode, mode_dict[str(mode)]))
@@ -568,14 +499,16 @@ if __name__ == '__main__':
 
     # task 2: feasibility_dual
     if mode == 2:
-        X,y,S = compute_feasibility_dual(C, A[:], b, mode, False) # len(b) == m
+        X,y,S = compute_feasibility_dual(C, A[:], b, mode) # len(b) == m
         ## output: len(y) == m+1
         print('\n---------------Output: feasibility Test for SDP_D-------------------')
         last_idx = len(b) # == len(y) - 1
         eps = 1.0e-10 # change here if necessary
         print("optimal dual obj. value: max y_m+1 = {0}".format(y[last_idx]))
-        optimal_primal_value = np.multiply(np.matrix(C),X).sum()
-        print("optimal primal obj. value: C \cdot X = {0}". format(optimal_primal_value))
+        beta = 1 - np.trace(X)
+        print("beta = {0}---should be nonnegative!".format(beta))
+        optimal_primal_value = np.multiply(np.matrix(C),X).sum() + beta * 2 # M = 2
+        print("optimal primal obj. value: C \cdot X + beta * M = {0}". format(optimal_primal_value))
         print("duality gap = {0}".format(optimal_primal_value - y[last_idx]))
         print("eps = {0}\n".format(eps))
         if ( y[last_idx] > eps):
@@ -585,9 +518,12 @@ if __name__ == '__main__':
         else: #==0?
             print("Two possible cases for Dual of SDP:\n feasible, but not strict feasible \n OR infeasible")
             print("(SDP-D): C - sum{yi*Ai} - eps*Id >= 0 is infeasible, C - sum{yi*Ai} + eps*Id >= 0 is feasible!")
+        print("X = ")
         print(X)
+        print("min_eig(X) = {0}".format(min(np.linalg.eigvals(X))))
+        print("\nS = ")
         print(S)
-        print(min(np.linalg.eigvals(S)))
+        print("min_eig(S) = {0}".format(min(np.linalg.eigvals(S))))
 
     if mode == 3: # feasibility_primal
         X,y,S = compute_feasibility_primal(C, A[:], b, mode)
@@ -596,7 +532,9 @@ if __name__ == '__main__':
         m = len(b) # len(y) == m+1
         #print(y)
         lambd = y[m]
-        optimal_dual_value = np.dot(b, y[:m]) # check here
+        gamma = 1 - np.trace(S)
+        print("gamma = {0}---should be nonnegative!".format(gamma))
+        optimal_dual_value = np.dot(b, y[:m]) - gamma*2 # M = 2
         print('opt_optim_value = {0}, opt_dual_value = {1}'.format(lambd, optimal_dual_value))
         print("duality gap = {0}".format(lambd - optimal_dual_value))
         eps = 1.0e-10
@@ -612,8 +550,11 @@ if __name__ == '__main__':
         #print(X)
         #print(S)
         ### THIS IS the real X we want in SDP-P!
+        print("X=")
         print(X - y[m]*np.eye(n))
-        print(min(np.linalg.eigvals(X - y[m]*np.eye(n))))
+        print("eigenvlaue of X = {0}".format(min(np.linalg.eigvals(X - y[m]*np.eye(n)))))
+        print("\nS=")
+        print(S)
         #print(min(np.linalg.eigvals(S)))
         #print(np.trace(S))
 
