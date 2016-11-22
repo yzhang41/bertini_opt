@@ -205,7 +205,7 @@ def compute_optimum(C, A, b, mode):
 
     # first set (m eqns): A_i \cdot X - b_i * (1-mu) - bs_i * mu
     # append y variables
-    if mode == 1:
+    if mode == 1 or mode == 3:
     	mm = m
     if mode == 2:
     	mm = m-1 # cut off the last one
@@ -277,8 +277,10 @@ def compute_optimum(C, A, b, mode):
     #variable_group = Xvariables + yvariables
     ## make variable_group to be list of list
     if mode == 3:
-        variable_group = [Xvariables, yvariables[:len(yvariables)-1], [yvariables[len(yvariables)-1]] ]
-    else:
+        variable_group = [Xvariables, yvariables[:len(yvariables)-1], [yvariables[len(yvariables)-1]]]
+    elif mode == 2:
+        variable_group = [Xvariables, yvariables[:len(yvariables)-1], [yvariables[len(yvariables)-1]]] # the last is y_{m+1}
+    else: # mode == 1:
         variable_group = [Xvariables, yvariables]
 
     # write out the input files
@@ -457,7 +459,7 @@ if __name__ == '__main__':
     ## set up parameters here
     ## cf. /examples/readme.txt for more details
     mode_dict = { '1':'optimum_solve', '2':'feasibility_test_dual', '3':'feasibility_test_primal', '4':'other test' }
-    example_tag = '9' ## change here, also can be input on command line
+    example_tag = '31' ## change here, also can be input on command line
     mode = 2
 
     print('---------------Example {0}-------------------'.format(example_tag))
